@@ -1,3 +1,4 @@
+<img width="1920" height="1020" alt="2026-05-15 (2)" src="https://github.com/user-attachments/assets/acc2347d-be66-42cf-b2a7-935a559f9b0c" />
 SOC Threat Intelligence Dashboard
 🚀 Project Overview
 
