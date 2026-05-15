@@ -1,4 +1,4 @@
-<img width="1920" height="1020" alt="2026-05-15 (2)" src="https://github.com/user-attachments/assets/acc2347d-be66-42cf-b2a7-935a559f9b0c" />
+
 SOC Threat Intelligence Dashboard
 🚀 Project Overview
 
@@ -79,3 +79,4 @@ Chart.js	Graph Visualization
 <img width="1920" height="1020" alt="2026-05-15" src="https://github.com/user-attachments/assets/5af10f59-6e6e-4c1d-8e1e-a073396f70e4" />
 <img width="1920" height="1020" alt="2026-05-15 (4)" src="https://github.com/user-attachments/assets/f7e28b3b-25bc-4a2b-a203-2b2c1ec03d53" />
 <img width="1920" height="1020" alt="2026-05-15 (5)" src="https://github.com/user-attachments/assets/79cfbd6e-2925-4155-9548-ee745f975314" />
+<img width="1920" height="1020" alt="2026-05-15 (2)" src="https://github.com/user-attachments/assets/acc2347d-be66-42cf-b2a7-935a559f9b0c" />
