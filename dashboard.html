@@ -1,0 +1,2455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced SOC Threat Intelligence Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="[cdn.jsdelivr.net](https://cdn.jsdelivr.net/npm/chart.js)"></script>
+    <style>
+        /* ========================= BASE STYLES ========================= */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        /* ========================= HEADER ========================= */
+        header {
+            background: linear-gradient(90deg, #16213e 0%, #1a1a2e 100%);
+            padding: 20px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            border-bottom: 3px solid #e74c3c;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ========================= CLOCK ========================= */
+        .clock {
+            text-align: right;
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+
+        /* ========================= SUMMARY CARDS ========================= */
+        .top-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .summary-card {
+            background: linear-gradient(145deg, #1e1e30 0%, #252540 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border-left: 4px solid #3498db;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .summary-card h2 {
+            font-size: 36px;
+            margin-bottom: 5px;
+        }
+
+        .summary-card p {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .total-card { border-left-color: #3498db; }
+        .total-card h2 { color: #3498db; }
+
+        .high-card { border-left-color: #e74c3c; }
+        .high-card h2 { color: #e74c3c; }
+
+        .medium-card { border-left-color: #f39c12; }
+        .medium-card h2 { color: #f39c12; }
+
+        .low-card { border-left-color: #27ae60; }
+        .low-card h2 { color: #27ae60; }
+
+        .mitre-card { border-left-color: #9b59b6; }
+        .mitre-card h2 { color: #9b59b6; }
+
+        .events-card { border-left-color: #1abc9c; }
+        .events-card h2 { color: #1abc9c; }
+
+        /* ========================= CHARTS ========================= */
+        .charts-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .chart-box {
+            background: #1e1e30;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 320px;
+        }
+
+        .chart-box h3 {
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-box canvas {
+            max-height: 260px;
+        }
+
+        /* ========================= MITRE SECTION ========================= */
+        .mitre-section {
+            margin: 30px 0;
+            background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid #333;
+        }
+
+        .section-title {
+            margin-bottom: 20px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Tactic Heatmap */
+        .tactic-heatmap {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .tactic-box {
+            background: #1e1e30;
+            border-radius: 10px;
+            padding: 15px 10px;
+            text-align: center;
+            border: 2px solid #333;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .tactic-box:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .tactic-box.hot {
+            border-color: #e74c3c;
+            background: linear-gradient(145deg, rgba(231, 76, 60, 0.3), rgba(192, 57, 43, 0.2));
+            box-shadow: 0 0 15px rgba(231, 76, 60, 0.3);
+        }
+
+        .tactic-box.warm {
+            border-color: #f39c12;
+            background: linear-gradient(145deg, rgba(243, 156, 18, 0.2), rgba(211, 84, 0, 0.15));
+        }
+
+        .tactic-box.cool {
+            border-color: #3498db;
+            background: linear-gradient(145deg, rgba(52, 152, 219, 0.15), rgba(41, 128, 185, 0.1));
+        }
+
+        .tactic-box.cold {
+            border-color: #333;
+            opacity: 0.5;
+        }
+
+        .tactic-count {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .tactic-name {
+            font-size: 9px;
+            color: #888;
+            margin-top: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* MITRE Navigator Style Matrix */
+        .mitre-matrix-container {
+            background: #1e1e30;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            overflow-x: auto;
+        }
+
+        .mitre-matrix-container h3 {
+            margin-bottom: 15px;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .mitre-matrix {
+            display: flex;
+            gap: 8px;
+            min-width: max-content;
+        }
+
+        .matrix-column {
+            min-width: 120px;
+        }
+
+        .matrix-header {
+            background: #252540;
+            padding: 10px 8px;
+            border-radius: 6px 6px 0 0;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .matrix-techniques {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .matrix-tech {
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .matrix-tech:hover {
+            transform: translateX(3px);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .matrix-tech.critical {
+            background: rgba(192, 57, 43, 0.4);
+            border-left-color: #c0392b;
+        }
+
+        .matrix-tech.high {
+            background: rgba(231, 76, 60, 0.3);
+            border-left-color: #e74c3c;
+        }
+
+        .matrix-tech.medium {
+            background: rgba(243, 156, 18, 0.3);
+            border-left-color: #f39c12;
+        }
+
+        .matrix-tech.low {
+            background: rgba(39, 174, 96, 0.3);
+            border-left-color: #27ae60;
+        }
+
+        .matrix-tech-id {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .matrix-tech-name {
+            color: #aaa;
+            font-size: 9px;
+        }
+
+        .matrix-tech-count {
+            float: right;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 9px;
+        }
+
+        /* MITRE Table */
+        .mitre-table-container {
+            background: #1e1e30;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .mitre-table-container h3 {
+            margin-bottom: 15px;
+            color: #888;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .table-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .table-search {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #252540;
+            color: #fff;
+            font-size: 12px;
+        }
+
+        .mitre-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .mitre-table th,
+        .mitre-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        .mitre-table th {
+            background: #252540;
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+        }
+
+        .mitre-table th:hover {
+            background: #2a2a4a;
+        }
+
+        .mitre-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.1);
+        }
+
+        .mitre-table td {
+            font-size: 13px;
+        }
+
+        .tech-id {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #fff;
+            display: inline-block;
+        }
+
+        .severity-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .severity-badge.critical { background: #c0392b; color: #fff; }
+        .severity-badge.high { background: #e74c3c; color: #fff; }
+        .severity-badge.medium { background: #f39c12; color: #000; }
+        .severity-badge.low { background: #27ae60; color: #fff; }
+
+        .ip-count {
+            background: #333;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        /* ========================= CONTROLS ========================= */
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 280px;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            background: #252540;
+            color: #fff;
+            font-size: 14px;
+            transition: box-shadow 0.3s;
+        }
+
+        .search-box:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #3498db;
+        }
+
+        .search-box::placeholder {
+            color: #666;
+        }
+
+        .filter-select {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            background: #252540;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 180px;
+        }
+
+        .export-btn {
+            padding: 14px 25px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(145deg, #3498db, #2980b9);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 500;
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(52, 152, 219, 0.4);
+        }
+
+        .mitre-btn {
+            background: linear-gradient(145deg, #9b59b6, #8e44ad);
+        }
+
+        .mitre-btn:hover {
+            box-shadow: 0 5px 20px rgba(155, 89, 182, 0.4);
+        }
+
+        .csv-btn {
+            background: linear-gradient(145deg, #27ae60, #1e8449);
+        }
+
+        /* ========================= INTEL PANEL ========================= */
+        .intel-panel {
+            position: fixed;
+            top: 0;
+            right: -700px;
+            width: 680px;
+            height: 100vh;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            box-shadow: -10px 0 40px rgba(0,0,0,0.5);
+            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+            z-index: 1000;
+            padding: 25px;
+        }
+
+        .intel-panel.active {
+            right: 0;
+        }
+
+        .intel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #333;
+        }
+
+        .intel-header h2 {
+            font-size: 18px;
+        }
+
+        .close-btn {
+            background: rgba(231, 76, 60, 0.2);
+            border: none;
+            color: #e74c3c;
+            font-size: 20px;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .intel-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .intel-card {
+            background: #252540;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .intel-card h3 {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .intel-card p {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .ip-display {
+            font-family: 'Courier New', monospace;
+            color: #3498db;
+        }
+
+        .threat-badge {
+            padding: 8px 20px;
+            border-radius: 25px;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .threat-badge.high { background: linear-gradient(145deg, #e74c3c, #c0392b); }
+        .threat-badge.medium { background: linear-gradient(145deg, #f39c12, #d68910); color: #000; }
+        .threat-badge.low { background: linear-gradient(145deg, #27ae60, #1e8449); }
+
+        /* Attack Chain */
+        .attack-chain-container {
+            background: #252540;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .attack-chain-container h4 {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .attack-chain {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 15px 0;
+        }
+
+        .chain-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .chain-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .chain-content {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 12px 15px;
+            min-width: 140px;
+            border: 1px solid #333;
+        }
+
+        .chain-tactic {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .chain-techniques {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .chain-tech {
+            font-size: 9px;
+            background: rgba(255,255,255,0.1);
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: #aaa;
+        }
+
+        .chain-count {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .chain-arrow {
+            font-size: 24px;
+            color: #444;
+            flex-shrink: 0;
+        }
+
+        /* IP MITRE Grid */
+        .ip-mitre-container {
+            background: #252540;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .ip-mitre-container h4 {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .ip-mitre-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .ip-mitre-card {
+            background: #1a1a2e;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+
+        .ip-mitre-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .ip-mitre-header {
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ip-mitre-id {
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .ip-mitre-count {
+            font-size: 11px;
+            color: rgba(255,255,255,0.7);
+            background: rgba(0,0,0,0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .ip-mitre-body {
+            padding: 12px;
+            position: relative;
+        }
+
+        .ip-mitre-name {
+            font-size: 11px;
+            color: #fff;
+            margin-bottom: 5px;
+            line-height: 1.3;
+        }
+
+        .ip-mitre-tactic {
+            font-size: 9px;
+            color: #888;
+        }
+
+        .severity-dot {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .severity-dot.critical { background: #c0392b; box-shadow: 0 0 8px #c0392b; }
+        .severity-dot.high { background: #e74c3c; }
+        .severity-dot.medium { background: #f39c12; }
+        .severity-dot.low { background: #27ae60; }
+
+        /* IP Charts */
+        .ip-charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .ip-chart-box {
+            background: #252540;
+            border-radius: 12px;
+            padding: 18px;
+            min-height: 220px;
+        }
+
+        .ip-chart-box h4 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .ip-chart-box canvas {
+            max-height: 170px;
+        }
+
+        /* Risk Meter */
+        .risk-meter-container {
+            background: #252540;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .risk-meter-container h4 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .risk-meter {
+            height: 24px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .risk-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 12px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .risk-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .risk-fill.high { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+        .risk-fill.medium { background: linear-gradient(90deg, #f39c12, #d68910); }
+        .risk-fill.low { background: linear-gradient(90deg, #27ae60, #1e8449); }
+
+        #riskText {
+            text-align: center;
+            margin-top: 12px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        /* Timeline */
+        .timeline-container {
+            background: #252540;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .timeline-container h4 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            position: sticky;
+            top: 0;
+            background: #252540;
+            padding-bottom: 10px;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-left: 15px;
+            border-left: 3px solid #333;
+            transition: border-color 0.2s;
+        }
+
+        .timeline-item:hover {
+            border-left-color: #3498db;
+        }
+
+        .timeline-item.critical { border-left-color: #c0392b; }
+        .timeline-item.high { border-left-color: #e74c3c; }
+        .timeline-item.medium { border-left-color: #f39c12; }
+        .timeline-item.low { border-left-color: #27ae60; }
+
+        .timeline-marker {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .timeline-time {
+            font-size: 11px;
+            color: #666;
+            font-family: monospace;
+        }
+
+        .timeline-mitre {
+            font-size: 9px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .timeline-event {
+            display: block;
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        .timeline-message {
+            font-size: 11px;
+            color: #888;
+            line-height: 1.4;
+        }
+
+        /* ========================= INCIDENTS ========================= */
+        #incident-container {
+            display: grid;
+            gap: 15px;
+        }
+
+        .incident-card {
+            background: linear-gradient(145deg, #1e1e30 0%, #252540 100%);
+            border-radius: 14px;
+            padding: 22px;
+            border-left: 5px solid #3498db;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .incident-card:hover {
+            transform: translateX(8px);
+            box-shadow: 0 5px 25px rgba(0,0,0,0.3);
+        }
+
+        .incident-card.high { border-left-color: #e74c3c; }
+        .incident-card.medium { border-left-color: #f39c12; }
+        .incident-card.low { border-left-color: #27ae60; }
+
+        .incident-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .incident-info h3 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .event-count {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .intel-btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(145deg, #3498db, #2980b9);
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .intel-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .incident-stats {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .risk-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .risk-badge.high { background: #e74c3c; }
+        .risk-badge.medium { background: #f39c12; color: #000; }
+        .risk-badge.low { background: #27ae60; }
+
+        /* MITRE Tags in Incidents */
+        .incident-mitre-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 12px 0;
+        }
+
+        .mitre-tag {
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .mitre-tag:hover {
+            transform: scale(1.1);
+        }
+
+        .more-tag {
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 10px;
+            background: #444;
+            color: #888;
+        }
+
+        /* Alert Details */
+        details {
+            margin-top: 12px;
+        }
+
+        summary {
+            cursor: pointer;
+            color: #3498db;
+            font-size: 13px;
+            padding: 8px 0;
+            transition: color 0.2s;
+        }
+
+        summary:hover {
+            color: #5dade2;
+        }
+
+        .alerts-container {
+            margin-top: 15px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .alert-item {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #333;
+        }
+
+        .alert-item.critical { border-left-color: #c0392b; }
+        .alert-item.high { border-left-color: #e74c3c; }
+        .alert-item.medium { border-left-color: #f39c12; }
+        .alert-item.low { border-left-color: #27ae60; }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .alert-type {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .alert-severity {
+            font-size: 10px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+
+        .alert-severity.critical { background: #c0392b; }
+        .alert-severity.high { background: #e74c3c; }
+        .alert-severity.medium { background: #f39c12; color: #000; }
+        .alert-severity.low { background: #27ae60; }
+
+        .alert-message {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        .alert-mitre {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .mitre-technique {
+            padding: 4px 12px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .alert-mitre .mitre-name {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .alert-mitre .mitre-tactic {
+            font-size: 10px;
+            color: #666;
+            background: #333;
+            padding: 3px 10px;
+            border-radius: 5px;
+        }
+
+        .alert-meta {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .alert-time {
+            font-size: 11px;
+            color: #666;
+            font-family: monospace;
+        }
+
+        /* ========================= SCROLLBAR ========================= */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        /* ========================= RESPONSIVE ========================= */
+        @media (max-width: 1200px) {
+            .charts-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .intel-panel {
+                width: 100%;
+                right: -100%;
+            }
+            
+            .ip-charts-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .top-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .tactic-heatmap {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .attack-chain {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .chain-arrow {
+                transform: rotate(90deg);
+                align-self: center;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .search-box, .filter-select, .export-btn {
+                width: 100%;
+            }
+        }
+
+        /* ========================= ANIMATIONS ========================= */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .tactic-box.hot .tactic-count {
+            animation: pulse 2s infinite;
+        }
+
+        /* Overlay when panel is open */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    ðŸ›¡ï¸ Advanced SOC Threat Intelligence Dashboard
+</header>
+
+<div class="overlay" id="overlay" onclick="closeIntelPanel()"></div>
+
+<div class="container">
+
+    <!-- LIVE CLOCK -->
+    <div class="clock" id="clock"></div>
+
+    <!-- SUMMARY CARDS -->
+    <div class="top-cards">
+        <div class="summary-card total-card">
+            <h2 id="total-incidents">0</h2>
+            <p>Total IPs</p>
+        </div>
+        <div class="summary-card high-card">
+            <h2 id="high-count">0</h2>
+            <p>High Risk</p>
+        </div>
+        <div class="summary-card medium-card">
+            <h2 id="medium-count">0</h2>
+            <p>Medium Risk</p>
+        </div>
+        <div class="summary-card low-card">
+            <h2 id="low-count">0</h2>
+            <p>Low Risk</p>
+        </div>
+        <div class="summary-card mitre-card">
+            <h2 id="mitre-count">0</h2>
+            <p>MITRE Techniques</p>
+        </div>
+        <div class="summary-card events-card">
+            <h2 id="total-events">0</h2>
+            <p>Total Events</p>
+        </div>
+    </div>
+
+    <!-- CHARTS ROW -->
+    <div class="charts-row">
+        <div class="chart-box">
+            <h3>ðŸ“Š Risk Score by IP Address</h3>
+            <canvas id="attackChart"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>ðŸŽ¯ Severity Distribution</h3>
+            <canvas id="severityPieChart"></canvas>
+        </div>
+    </div>
+
+    <!-- MITRE ATT&CK SECTION -->
+    <div class="mitre-section">
+        <h2 class="section-title">ðŸŽ¯ MITRE ATT&CK Framework Coverage</h2>
+        
+        <!-- Tactic Heat Map -->
+        <div class="tactic-heatmap" id="tacticHeatmap">
+            <div class="tactic-box" data-tactic="Reconnaissance">
+                <div class="tactic-count" id="tactic-reconnaissance">0</div>
+                <div class="tactic-name">Reconnaissance</div>
+            </div>
+            <div class="tactic-box" data-tactic="Resource Development">
+                <div class="tactic-count" id="tactic-resource-development">0</div>
+                <div class="tactic-name">Resource Development</div>
+            </div>
+            <div class="tactic-box" data-tactic="Initial Access">
+                <div class="tactic-count" id="tactic-initial-access">0</div>
+                <div class="tactic-name">Initial Access</div>
+            </div>
+            <div class="tactic-box" data-tactic="Execution">
+                <div class="tactic-count" id="tactic-execution">0</div>
+                <div class="tactic-name">Execution</div>
+            </div>
+            <div class="tactic-box" data-tactic="Persistence">
+                <div class="tactic-count" id="tactic-persistence">0</div>
+                <div class="tactic-name">Persistence</div>
+            </div>
+            <div class="tactic-box" data-tactic="Privilege Escalation">
+                <div class="tactic-count" id="tactic-privilege-escalation">0</div>
+                <div class="tactic-name">Privilege Escalation</div>
+            </div>
+            <div class="tactic-box" data-tactic="Defense Evasion">
+                <div class="tactic-count" id="tactic-defense-evasion">0</div>
+                <div class="tactic-name">Defense Evasion</div>
+            </div>
+            <div class="tactic-box" data-tactic="Credential Access">
+                <div class="tactic-count" id="tactic-credential-access">0</div>
+                <div class="tactic-name">Credential Access</div>
+            </div>
+            <div class="tactic-box" data-tactic="Discovery">
+                <div class="tactic-count" id="tactic-discovery">0</div>
+                <div class="tactic-name">Discovery</div>
+            </div>
+            <div class="tactic-box" data-tactic="Lateral Movement">
+                <div class="tactic-count" id="tactic-lateral-movement">0</div>
+                <div class="tactic-name">Lateral Movement</div>
+            </div>
+            <div class="tactic-box" data-tactic="Collection">
+                <div class="tactic-count" id="tactic-collection">0</div>
+                <div class="tactic-name">Collection</div>
+            </div>
+            <div class="tactic-box" data-tactic="Command and Control">
+                <div class="tactic-count" id="tactic-command-and-control">0</div>
+                <div class="tactic-name">Command & Control</div>
+            </div>
+            <div class="tactic-box" data-tactic="Exfiltration">
+                <div class="tactic-count" id="tactic-exfiltration">0</div>
+                <div class="tactic-name">Exfiltration</div>
+            </div>
+            <div class="tactic-box" data-tactic="Impact">
+                <div class="tactic-count" id="tactic-impact">0</div>
+                <div class="tactic-name">Impact</div>
+            </div>
+        </div>
+
+        <!-- MITRE Navigator Style Matrix -->
+        <div class="mitre-matrix-container">
+            <h3>ðŸ—ºï¸ MITRE ATT&CK Navigator View</h3>
+            <div class="mitre-matrix" id="mitreMatrix"></div>
+        </div>
+
+        <!-- MITRE Charts -->
+        <div class="charts-row">
+            <div class="chart-box">
+                <h3>ðŸ”´ Top 10 Techniques Detected</h3>
+                <canvas id="mitreBarChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3>ðŸ“ˆ Tactics Radar Distribution</h3>
+                <canvas id="tacticRadarChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Technique Details Table -->
+        <div class="mitre-table-container">
+            <h3>
+                ðŸ“‹ Detected Techniques Detail
+                <div class="table-controls">
+                    <input type="text" class="table-search" id="tableSearch" placeholder="Search techniques...">
+                </div>
+            </h3>
+            <table class="mitre-table" id="mitreTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)">Technique ID â†•</th>
+                        <th onclick="sortTable(1)">Name â†•</th>
+                        <th onclick="sortTable(2)">Tactic â†•</th>
+                        <th onclick="sortTable(3)">Count â†•</th>
+                        <th onclick="sortTable(4)">Severity â†•</th>
+                        <th onclick="sortTable(5)">Affected IPs â†•</th>
+                    </tr>
+                </thead>
+                <tbody id="mitreTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SEARCH + EXPORT -->
+    <div class="controls">
+        <input type="text" id="searchBox" class="search-box" placeholder="ðŸ” Search IP / Alert / MITRE Technique...">
+        <select id="tacticFilter" class="filter-select">
+            <option value="all">All Tactics</option>
+            <option value="Reconnaissance">Reconnaissance</option>
+            <option value="Initial Access">Initial Access</option>
+            <option value="Execution">Execution</option>
+            <option value="Persistence">Persistence</option>
+            <option value="Privilege Escalation">Privilege Escalation</option>
+            <option value="Defense Evasion">Defense Evasion</option>
+            <option value="Credential Access">Credential Access</option>
+            <option value="Discovery">Discovery</option>
+            <option value="Lateral Movement">Lateral Movement</option>
+            <option value="Collection">Collection</option>
+            <option value="Command and Control">Command and Control</option>
+            <option value="Exfiltration">Exfiltration</option>
+            <option value="Impact">Impact</option>
+        </select>
+        <select id="severityFilter" class="filter-select">
+            <option value="all">All Severities</option>
+            <option value="high">High Risk Only</option>
+            <option value="medium">Medium Risk Only</option>
+            <option value="low">Low Risk Only</option>
+        </select>
+        <button onclick="exportData()" class="export-btn">ðŸ“¥ Export JSON</button>
+        <button onclick="exportMitreReport()" class="export-btn mitre-btn">ðŸ“¥ MITRE Report</button>
+        <button onclick="exportCSV()" class="export-btn csv-btn">ðŸ“¥ Export CSV</button>
+    </div>
+
+    <!-- IP INTELLIGENCE PANEL -->
+    <div class="intel-panel" id="intelPanel">
+        <div class="intel-header">
+            <h2>ðŸ”Ž IP Threat Intelligence Analysis</h2>
+            <button class="close-btn" onclick="closeIntelPanel()">âœ•</button>
+        </div>
+
+        <div class="intel-grid">
+            <div class="intel-card">
+                <h3>Selected IP</h3>
+                <p id="selected-ip" class="ip-display">No IP Selected</p>
+            </div>
+            <div class="intel-card">
+                <h3>Total Events</h3>
+                <p id="selected-alerts">0</p>
+            </div>
+            <div class="intel-card">
+                <h3>Risk Score</h3>
+                <p id="selected-score">0/20</p>
+            </div>
+            <div class="intel-card">
+                <h3>Threat Level</h3>
+                <p id="selected-threat" class="threat-badge">N/A</p>
+            </div>
+        </div>
+
+        <!-- IP Attack Chain -->
+        <div class="attack-chain-container">
+            <h4>âš”ï¸ Kill Chain Progression</h4>
+            <div class="attack-chain" id="attackChain"></div>
+        </div>
+
+        <!-- IP MITRE Mapping -->
+        <div class="ip-mitre-container">
+            <h4>ðŸŽ¯ MITRE ATT&CK Techniques for this IP</h4>
+            <div class="ip-mitre-grid" id="ipMitreGrid"></div>
+        </div>
+
+        <!-- IP Charts -->
+        <div class="ip-charts-row">
+            <div class="ip-chart-box">
+                <h4>Event Type Distribution</h4>
+                <canvas id="ipEventChart"></canvas>
+            </div>
+            <div class="ip-chart-box">
+                <h4>Tactic Coverage Radar</h4>
+                <canvas id="ipMitreChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Risk Meter -->
+        <div class="risk-meter-container">
+            <h4>Overall Threat Risk Assessment</h4>
+            <div class="risk-meter">
+                <div class="risk-fill" id="riskFill"></div>
+            </div>
+            <p id="riskText">0%</p>
+        </div>
+
+        <!-- Timeline -->
+        <div class="timeline-container">
+            <h4>ðŸ“ˆ Attack Event Timeline</h4>
+            <div id="timeline"></div>
+        </div>
+    </div>
+
+    <!-- INCIDENT LIST -->
+    <h2 class="section-title">ðŸš¨ Detected Security Incidents</h2>
+    <div id="incident-container"></div>
+
+</div>
+
+<!-- ALERT SOUND -->
+<audio id="alertSound" preload="auto">
+    <source src="[soundjay.com](https://www.soundjay.com/buttons/sounds/beep-01a.mp3)" type="audio/mpeg">
+</audio>
+
+<script>
+/* ========================= MITRE ATT&CK DATABASE ========================= */
+const MITRE_DATABASE = {
+    // Reconnaissance
+    "T1595": { name: "Active Scanning", tactic: "Reconnaissance", severity: "medium", description: "Scanning IP blocks to gather victim information" },
+    "T1592": { name: "Gather Victim Host Info", tactic: "Reconnaissance", severity: "low", description: "Gathering information about victim hosts" },
+    "T1589": { name: "Gather Victim Identity Info", tactic: "Reconnaissance", severity: "low", description: "Gathering victim identity information" },
+    
+    // Initial Access
+    "T1190": { name: "Exploit Public-Facing App", tactic: "Initial Access", severity: "critical", description: "Exploiting vulnerabilities in internet-facing systems" },
+    "T1133": { name: "External Remote Services", tactic: "Initial Access", severity: "high", description: "Leveraging external remote services for access" },
+    "T1078": { name: "Valid Accounts", tactic: "Initial Access", severity: "high", description: "Using legitimate credentials for access" },
+    "T1566": { name: "Phishing", tactic: "Initial Access", severity: "high", description: "Sending phishing messages to gain access" },
+    "T1199": { name: "Trusted Relationship", tactic: "Initial Access", severity: "high", description: "Exploiting trusted third-party relationships" },
+    
+    // Execution
+    "T1059": { name: "Command & Scripting Interpreter", tactic: "Execution", severity: "high", description: "Abusing command and script interpreters" },
+    "T1204": { name: "User Execution", tactic: "Execution", severity: "medium", description: "Relying on user actions for execution" },
+    "T1106": { name: "Native API", tactic: "Execution", severity: "medium", description: "Interacting with native OS API" },
+    "T1053": { name: "Scheduled Task/Job", tactic: "Persistence", severity: "high", description: "Abusing task scheduling for persistence" },
+    
+    // Persistence
+    "T1543": { name: "Create/Modify System Process", tactic: "Persistence", severity: "high", description: "Creating/modifying system processes" },
+    "T1136": { name: "Create Account", tactic: "Persistence", severity: "high", description: "Creating new accounts for persistence" },
+    "T1547": { name: "Boot/Logon Autostart", tactic: "Persistence", severity: "high", description: "Configuring autostart execution" },
+    
+    // Privilege Escalation
+    "T1548": { name: "Abuse Elevation Control", tactic: "Privilege Escalation", severity: "critical", description: "Bypassing UAC or sudo" },
+    "T1068": { name: "Exploitation for Privilege Escalation", tactic: "Privilege Escalation", severity: "critical", description: "Exploiting vulnerabilities for elevated privileges" },
+    "T1134": { name: "Access Token Manipulation", tactic: "Privilege Escalation", severity: "high", description: "Manipulating access tokens" },
+    
+    // Defense Evasion
+    "T1562": { name: "Impair Defenses", tactic: "Defense Evasion", severity: "critical", description: "Disabling security tools" },
+    "T1070": { name: "Indicator Removal", tactic: "Defense Evasion", severity: "high", description: "Deleting or modifying artifacts" },
+    "T1036": { name: "Masquerading", tactic: "Defense Evasion", severity: "medium", description: "Manipulating features to appear legitimate" },
+    "T1027": { name: "Obfuscated Files/Info", tactic: "Defense Evasion", severity: "medium", description: "Obfuscating malicious content" },
+    
+    // Credential Access
+    "T1110": { name: "Brute Force", tactic: "Credential Access", severity: "high", description: "Attempting to gain access through brute force" },
+    "T1003": { name: "OS Credential Dumping", tactic: "Credential Access", severity: "critical", description: "Dumping credentials from OS" },
+    "T1555": { name: "Credentials from Password Stores", tactic: "Credential Access", severity: "high", description: "Searching for credentials in password stores" },
+    "T1552": { name: "Unsecured Credentials", tactic: "Credential Access", severity: "high", description: "Searching for unsecured credentials" },
+    
+    // Discovery
+    "T1046": { name: "Network Service Discovery", tactic: "Discovery", severity: "medium", description: "Scanning for running services" },
+    "T1018": { name: "Remote System Discovery", tactic: "Discovery", severity: "medium", description: "Discovering remote systems" },
+    "T1082": { name: "System Information Discovery", tactic: "Discovery", severity: "low", description: "Gathering system information" },
+    "T1087": { name: "Account Discovery", tactic: "Discovery", severity: "medium", description: "Discovering accounts on the system" },
+    "T1083": { name: "File & Directory Discovery", tactic: "Discovery", severity: "low", description: "Enumerating files and directories" },
+    
+    // Lateral Movement
+    "T1021": { name: "Remote Services", tactic: "Lateral Movement", severity: "high", description: "Using remote services for lateral movement" },
+    "T1091": { name: "Replication via Removable Media", tactic: "Lateral Movement", severity: "medium", description: "Moving laterally via removable media" },
+    "T1570": { name: "Lateral Tool Transfer", tactic: "Lateral Movement", severity: "high", description: "Transferring tools between systems" },
+    
+    // Collection
+    "T1005": { name: "Data from Local System", tactic: "Collection", severity: "high", description: "Collecting data from local system" },
+    "T1074": { name: "Data Staged", tactic: "Collection", severity: "high", description: "Staging collected data" },
+    "T1213": { name: "Data from Info Repositories", tactic: "Collection", severity: "high", description: "Collecting data from repositories" },
+    "T1114": { name: "Email Collection", tactic: "Collection", severity: "high", description: "Collecting email data" },
+    "T1119": { name: "Automated Collection", tactic: "Collection", severity: "high", description: "Automated data collection" },
+    
+    // Command and Control
+    "T1071": { name: "Application Layer Protocol", tactic: "Command and Control", severity: "high", description: "Using application protocols for C2" },
+    "T1105": { name: "Ingress Tool Transfer", tactic: "Command and Control", severity: "high", description: "Transferring tools into the environment" },
+    "T1572": { name: "Protocol Tunneling", tactic: "Command and Control", severity: "high", description: "Tunneling C2 through protocols" },
+    "T1573": { name: "Encrypted Channel", tactic: "Command and Control", severity: "medium", description: "Using encrypted channels for C2" },
+    
+    // Exfiltration
+    "T1041": { name: "Exfiltration Over C2 Channel", tactic: "Exfiltration", severity: "critical", description: "Exfiltrating data over C2" },
+    "T1048": { name: "Exfiltration Over Alt Protocol", tactic: "Exfiltration", severity: "critical", description: "Using alternative protocols for exfiltration" },
+    "T1567": { name: "Exfiltration Over Web Service", tactic: "Exfiltration", severity: "high", description: "Using web services for exfiltration" },
+    "T1020": { name: "Automated Exfiltration", tactic: "Exfiltration", severity: "critical", description: "Automated data exfiltration" },
+    
+    // Impact
+    "T1486": { name: "Data Encrypted for Impact", tactic: "Impact", severity: "critical", description: "Encrypting data for ransom" },
+    "T1485": { name: "Data Destruction", tactic: "Impact", severity: "critical", description: "Destroying data" },
+    "T1489": { name: "Service Stop", tactic: "Impact", severity: "high", description: "Stopping services" },
+    "T1496": { name: "Resource Hijacking", tactic: "Impact", severity: "high", description: "Hijacking resources for mining" },
+    "T1498": { name: "Network Denial of Service", tactic: "Impact", severity: "high", description: "Performing network DoS" },
+    "T1499": { name: "Endpoint Denial of Service", tactic: "Impact", severity: "high", description: "Performing endpoint DoS" },
+    "T1490": { name: "Inhibit System Recovery", tactic: "Impact", severity: "critical", description: "Deleting backups or recovery data" },
+    "T1565": { name: "Data Manipulation", tactic: "Impact", severity: "high", description: "Manipulating data" }
+};
+
+// Kill chain tactic order
+const TACTIC_ORDER = [
+    "Reconnaissance",
+    "Resource Development", 
+    "Initial Access",
+    "Execution",
+    "Persistence",
+    "Privilege Escalation",
+    "Defense Evasion",
+    "Credential Access",
+    "Discovery",
+    "Lateral Movement",
+    "Collection",
+    "Command and Control",
+    "Exfiltration",
+    "Impact"
+];
+
+// Tactic colors
+const TACTIC_COLORS = {
+    "Reconnaissance": "#3498db",
+    "Resource Development": "#9b59b6",
+    "Initial Access": "#e74c3c",
+    "Execution": "#e67e22",
+    "Persistence": "#f39c12",
+    "Privilege Escalation": "#c0392b",
+    "Defense Evasion": "#1abc9c",
+    "Credential Access": "#d35400",
+    "Discovery": "#2980b9",
+    "Lateral Movement": "#8e44ad",
+    "Collection": "#27ae60",
+    "Command and Control": "#e74c3c",
+    "Exfiltration": "#c0392b",
+    "Impact": "#8b0000"
+};
+
+/* ========================= GLOBAL VARIABLES ========================= */
+let attackChart = null;
+let severityChart = null;
+let mitreBarChart = null;
+let tacticRadarChart = null;
+let ipEventChart = null;
+let ipMitreChart = null;
+let allIncidents = [];
+let globalMitreStats = {};
+let tableSortDirection = {};
+
+/* ========================= LOAD INCIDENTS ========================= */
+async function loadIncidents() {
+    try {
+        const response = await fetch('/api/incidents');
+        allIncidents = await response.json();
+        
+        processMitreStatistics();
+        renderIncidents();
+        updateSummaryCards();
+        updateCharts();
+        updateMitreSection();
+        renderMitreMatrix();
+        
+    } catch (error) {
+        console.error("Dashboard Error:", error);
+    }
+}
+
+/* ========================= PROCESS MITRE STATISTICS ========================= */
+function processMitreStatistics() {
+    globalMitreStats = {
+        techniques: {},
+        tactics: {},
+        techniquesByIP: {},
+        totalEvents: 0
+    };
+    
+    TACTIC_ORDER.forEach(tactic => {
+        globalMitreStats.tactics[tactic] = 0;
+    });
+    
+    allIncidents.forEach(incident => {
+        globalMitreStats.totalEvents += incident.event_count || incident.alerts.length;
+        
+        incident.alerts.forEach(alert => {
+            if (alert.mitre && alert.mitre.technique !== "N/A") {
+                const techId = alert.mitre.technique;
+                const techInfo = MITRE_DATABASE[techId] || alert.mitre;
+                
+                if (!globalMitreStats.techniques[techId]) {
+                    globalMitreStats.techniques[techId] = {
+                        id: techId,
+                        name: techInfo.name || alert.mitre.name,
+                        tactic: techInfo.tactic || alert.mitre.tactic,
+                        severity: techInfo.severity || "medium",
+                        description: techInfo.description || "",
+                        count: 0,
+                        ips: new Set()
+                    };
+                }
+                globalMitreStats.techniques[techId].count++;
+                globalMitreStats.techniques[techId].ips.add(incident.ip);
+                
+                const tactic = techInfo.tactic || alert.mitre.tactic;
+                if (globalMitreStats.tactics[tactic] !== undefined) {
+                    globalMitreStats.tactics[tactic]++;
+                }
+                
+                if (!globalMitreStats.techniquesByIP[incident.ip]) {
+                    globalMitreStats.techniquesByIP[incident.ip] = new Set();
+                }
+                globalMitreStats.techniquesByIP[incident.ip].add(techId);
+            }
+        });
+    });
+}
+
+/* ========================= RENDER MITRE MATRIX ========================= */
+function renderMitreMatrix() {
+    const container = document.getElementById('mitreMatrix');
+    
+    // Group techniques by tactic
+    const tacticTechniques = {};
+    TACTIC_ORDER.forEach(tactic => {
+        tacticTechniques[tactic] = [];
+    });
+    
+    Object.values(globalMitreStats.techniques).forEach(tech => {
+        if (tacticTechniques[tech.tactic]) {
+            tacticTechniques[tech.tactic].push(tech);
+        }
+    });
+    
+    // Sort techniques within each tactic by count
+    Object.keys(tacticTechniques).forEach(tactic => {
+        tacticTechniques[tactic].sort((a, b) => b.count - a.count);
+    });
+    
+    // Build matrix HTML
+    container.innerHTML = TACTIC_ORDER
+        .filter(tactic => tacticTechniques[tactic].length > 0)
+        .map(tactic => {
+            const techniques = tacticTechniques[tactic];
+            const color = TACTIC_COLORS[tactic];
+            
+            return `
+                <div class="matrix-column">
+                    <div class="matrix-header" style="background:${color}">${tactic}</div>
+                    <div class="matrix-techniques">
+                        ${techniques.map(tech => `
+                            <div class="matrix-tech ${tech.severity}" 
+                                 onclick="showTechniqueDetail('${tech.id}')"
+                                 title="${tech.description}">
+                                <span class="matrix-tech-id">${tech.id}</span>
+                                <span class="matrix-tech-count">${tech.count}</span>
+                                <span class="matrix-tech-name">${tech.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+}
+
+/* ========================= SHOW TECHNIQUE DETAIL ========================= */
+function showTechniqueDetail(techId) {
+    const tech = globalMitreStats.techniques[techId];
+    if (!tech) return;
+    
+    const info = MITRE_DATABASE[techId] || {};
+    const affectedIPs = [...tech.ips];
+    
+    alert(`
+MITRE ATT&CK Technique Detail
+
+ID: ${techId}
+Name: ${tech.name}
+Tactic: ${tech.tactic}
+Severity: ${tech.severity.toUpperCase()}
+Description: ${info.description || 'N/A'}
+
+Occurrences: ${tech.count}
+Affected IPs: ${affectedIPs.join(', ')}
+    `);
+}
+
+/* ========================= RENDER INCIDENTS ========================= */
+function renderIncidents() {
+    const container = document.getElementById('incident-container');
+    container.innerHTML = "";
+    
+    const searchValue = document.getElementById('searchBox').value.toLowerCase();
+    const tacticFilter = document.getElementById('tacticFilter').value;
+    const severityFilter = document.getElementById('severityFilter').value;
+    
+    const filtered = allIncidents.filter(incident => {
+        const matchesSearch = 
+            incident.ip.toLowerCase().includes(searchValue) ||
+            JSON.stringify(incident.alerts).toLowerCase().includes(searchValue);
+        
+        let matchesTactic = tacticFilter === 'all';
+        if (!matchesTactic) {
+            matchesTactic = incident.alerts.some(alert => 
+                alert.mitre && alert.mitre.tactic === tacticFilter
+            );
+        }
+        
+        const matchesSeverity = severityFilter === 'all' || incident.level === severityFilter;
+        
+        return matchesSearch && matchesTactic && matchesSeverity;
+    });
+    
+    filtered.forEach(incident => {
+        const card = document.createElement('div');
+        card.className = `incident-card ${incident.level}`;
+        
+        const techniques = [...new Set(incident.alerts
+            .filter(a => a.mitre && a.mitre.technique !== "N/A")
+            .map(a => a.mitre.technique))];
+        
+        const mitreTags = techniques.slice(0, 5).map(t => {
+            const info = MITRE_DATABASE[t] || {};
+            const color = TACTIC_COLORS[info.tactic] || '#666';
+            return `<span class="mitre-tag" style="background:${color}" title="${info.name || t}" onclick="showTechniqueDetail('${t}')">${t}</span>`;
+        }).join('');
+        
+        const alertsHTML = incident.alerts.map(alert => {
+            const techInfo = MITRE_DATABASE[alert.mitre?.technique] || {};
+            const tacticColor = TACTIC_COLORS[techInfo.tactic] || '#666';
+            
+            return `
+                <div class="alert-item ${alert.severity}">
+                    <div class="alert-header">
+                        <span class="alert-type">${alert.type}</span>
+                        <span class="alert-severity ${alert.severity}">${alert.severity.toUpperCase()}</span>
+                    </div>
+                    <p class="alert-message">${alert.message}</p>
+                    <div class="alert-mitre">
+                        <span class="mitre-technique" style="background:${tacticColor}">
+                            ${alert.mitre?.technique || 'N/A'}
+                        </span>
+                        <span class="mitre-name">${alert.mitre?.name || 'Unknown'}</span>
+                        <span class="mitre-tactic">${alert.mitre?.tactic || 'Unknown'}</span>
+                    </div>
+                    <div class="alert-meta">
+                        <span class="alert-time">ðŸ• ${formatTime(alert.timestamp)}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        card.innerHTML = `
+            <div class="incident-top">
+                <div class="incident-info">
+                    <h3>ðŸŒ ${incident.ip}</h3>
+                    <span class="event-count">${incident.event_count || incident.alerts.length} events detected</span>
+                </div>
+                <button class="intel-btn" onclick='showIntel("${incident.ip}")'>
+                    ðŸ” Analyze IP
+                </button>
+            </div>
+            <div class="incident-stats">
+                <div class="stat">
+                    <span class="stat-label">Risk Score</span>
+                    <span class="stat-value">${incident.risk_score}/20</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Threat Level</span>
+                    <span class="risk-badge ${incident.level}">${incident.level.toUpperCase()}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Techniques</span>
+                    <span class="stat-value">${techniques.length}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">First Seen</span>
+                    <span class="stat-value">${formatTime(incident.first_seen)}</span>
+                </div>
+            </div>
+            <div class="incident-mitre-tags">
+                ${mitreTags}
+                ${techniques.length > 5 ? `<span class="more-tag">+${techniques.length - 5} more</span>` : ''}
+            </div>
+            <details>
+                <summary>ðŸ“‹ View ${incident.alerts.length} Alert Details</summary>
+                <div class="alerts-container">${alertsHTML}</div>
+            </details>
+        `;
+        
+        container.appendChild(card);
+    });
+}
+
+/* ========================= UPDATE SUMMARY CARDS ========================= */
+function updateSummaryCards() {
+    const high = allIncidents.filter(i => i.level === 'high').length;
+    const medium = allIncidents.filter(i => i.level === 'medium').length;
+    const low = allIncidents.filter(i => i.level === 'low').length;
+    const uniqueTechniques = Object.keys(globalMitreStats.techniques).length;
+    
+    document.getElementById('total-incidents').innerText = allIncidents.length;
+    document.getElementById('high-count').innerText = high;
+    document.getElementById('medium-count').innerText = medium;
+    document.getElementById('low-count').innerText = low;
+    document.getElementById('mitre-count').innerText = uniqueTechniques;
+    document.getElementById('total-events').innerText = globalMitreStats.totalEvents;
+}
+
+/* ========================= UPDATE CHARTS ========================= */
+function updateCharts() {
+    const labels = allIncidents.map(i => i.ip);
+    const scores = allIncidents.map(i => i.risk_score);
+    const colors = allIncidents.map(i => {
+        if (i.level === 'high') return '#e74c3c';
+        if (i.level === 'medium') return '#f39c12';
+        return '#27ae60';
+    });
+    
+    const ctx1 = document.getElementById('attackChart');
+    if (attackChart) attackChart.destroy();
+    attackChart = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Risk Score',
+                data: scores,
+                backgroundColor: colors,
+                borderRadius: 6,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#888', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' }, max: 20 }
+            }
+        }
+    });
+    
+    const high = allIncidents.filter(i => i.level === 'high').length;
+    const medium = allIncidents.filter(i => i.level === 'medium').length;
+    const low = allIncidents.filter(i => i.level === 'low').length;
+    
+    const ctx2 = document.getElementById('severityPieChart');
+    if (severityChart) severityChart.destroy();
+    severityChart = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+            labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+            datasets: [{
+                data: [high, medium, low],
+                backgroundColor: ['#e74c3c', '#f39c12', '#27ae60'],
+                borderWidth: 0,
+                spacing: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: { position: 'bottom', labels: { color: '#888', padding: 20 } }
+            }
+        }
+    });
+}
+
+/* ========================= UPDATE MITRE SECTION ========================= */
+function updateMitreSection() {
+    // Update tactic heatmap
+    document.querySelectorAll('.tactic-box').forEach(box => {
+        box.classList.remove('hot', 'warm', 'cool', 'cold');
+    });
+    
+    Object.entries(globalMitreStats.tactics).forEach(([tactic, count]) => {
+        const tacticId = tactic.toLowerCase().replace(/ /g, '-');
+        const element = document.getElementById(`tactic-${tacticId}`);
+        if (element) {
+            element.innerText = count;
+            const box = element.parentElement;
+            if (count > 10) box.classList.add('hot');
+            else if (count > 5) box.classList.add('warm');
+            else if (count > 0) box.classList.add('cool');
+            else box.classList.add('cold');
+        }
+    });
+    
+    // MITRE Bar Chart
+    const sortedTechniques = Object.values(globalMitreStats.techniques)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    
+    const ctx3 = document.getElementById('mitreBarChart');
+    if (mitreBarChart) mitreBarChart.destroy();
+    mitreBarChart = new Chart(ctx3, {
+        type: 'bar',
+        data: {
+            labels: sortedTechniques.map(t => t.id),
+            datasets: [{
+                label: 'Occurrences',
+                data: sortedTechniques.map(t => t.count),
+                backgroundColor: sortedTechniques.map(t => TACTIC_COLORS[t.tactic] || '#666'),
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: (items) => {
+                            const tech = sortedTechniques[items[0].dataIndex];
+                            return `${tech.id}: ${tech.name}`;
+                        },
+                        label: (item) => `${item.raw} occurrences`
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#888' }, grid: { display: false } }
+            }
+        }
+    });
+    
+    // Tactic Radar Chart
+    const tacticLabels = TACTIC_ORDER.filter(t => globalMitreStats.tactics[t] > 0);
+    const tacticValues = tacticLabels.map(t => globalMitreStats.tactics[t]);
+    
+    const ctx4 = document.getElementById('tacticRadarChart');
+    if (tacticRadarChart) tacticRadarChart.destroy();
+    tacticRadarChart = new Chart(ctx4, {
+        type: 'radar',
+        data: {
+            labels: tacticLabels.map(t => t.length > 12 ? t.substring(0, 12) + '...' : t),
+            datasets: [{
+                label: 'Events',
+                data: tacticValues,
+                backgroundColor: 'rgba(231, 76, 60, 0.2)',
+                borderColor: '#e74c3c',
+                borderWidth: 2,
+                pointBackgroundColor: '#e74c3c',
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    ticks: { color: '#888', backdropColor: 'transparent' },
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    pointLabels: { color: '#888', font: { size: 10 } },
+                    angleLines: { color: 'rgba(255,255,255,0.1)' }
+                }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+    
+    // MITRE Table
+    updateMitreTable();
+}
+
+/* ========================= UPDATE MITRE TABLE ========================= */
+function updateMitreTable() {
+    const searchValue = document.getElementById('tableSearch')?.value?.toLowerCase() || '';
+    const tbody = document.getElementById('mitreTableBody');
+    
+    const filteredTechniques = Object.values(globalMitreStats.techniques)
+        .filter(tech => 
+            tech.id.toLowerCase().includes(searchValue) ||
+            tech.name.toLowerCase().includes(searchValue) ||
+            tech.tactic.toLowerCase().includes(searchValue)
+        )
+        .sort((a, b) => b.count - a.count);
+    
+    tbody.innerHTML = filteredTechniques.map(tech => {
+        const severityClass = tech.severity || 'medium';
+        const tacticColor = TACTIC_COLORS[tech.tactic] || '#666';
+        
+        return `
+            <tr onclick="showTechniqueDetail('${tech.id}')" style="cursor:pointer">
+                <td><span class="tech-id" style="background:${tacticColor}">${tech.id}</span></td>
+                <td>${tech.name}</td>
+                <td>${tech.tactic}</td>
+                <td><strong>${tech.count}</strong></td>
+                <td><span class="severity-badge ${severityClass}">${severityClass.toUpperCase()}</span></td>
+                <td><span class="ip-count">${tech.ips.size} IPs</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/* ========================= SORT TABLE ========================= */
+function sortTable(columnIndex) {
+    const table = document.getElementById('mitreTable');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    tableSortDirection[columnIndex] = !tableSortDirection[columnIndex];
+    const direction = tableSortDirection[columnIndex] ? 1 : -1;
+    
+    rows.sort((a, b) => {
+        let aVal = a.cells[columnIndex].textContent.trim();
+        let bVal = b.cells[columnIndex].textContent.trim();
+        
+        if (columnIndex === 3 || columnIndex === 5) {
+            aVal = parseInt(aVal) || 0;
+            bVal = parseInt(bVal) || 0;
+            return (aVal - bVal) * direction;
+        }
+        
+        return aVal.localeCompare(bVal) * direction;
+    });
+    
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+/* ========================= SHOW IP INTELLIGENCE ========================= */
+async function showIntel(ip) {
+    try {
+        const response = await fetch(`/api/ip/${ip}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('IP not found');
+            return;
+        }
+        
+        document.getElementById('selected-ip').innerText = data.ip;
+        document.getElementById('selected-alerts').innerText = data.event_count;
+        document.getElementById('selected-score').innerText = `${data.risk_score}/20`;
+        
+        const threatBadge = document.getElementById('selected-threat');
+        threatBadge.innerText = data.level.toUpperCase();
+        threatBadge.className = `threat-badge ${data.level}`;
+        
+        const riskPercent = (data.risk_score / 20) * 100;
+        document.getElementById('riskFill').style.width = `${riskPercent}%`;
+        document.getElementById('riskFill').className = `risk-fill ${data.level}`;
+        document.getElementById('riskText').innerText = `${riskPercent.toFixed(0)}% Risk`;
+        
+        renderAttackChain(data);
+        renderIPMitreGrid(data);
+        
+        // IP Event Chart
+        const eventLabels = Object.keys(data.event_distribution || {});
+        const eventValues = Object.values(data.event_distribution || {});
+        
+        const ctx5 = document.getElementById('ipEventChart');
+        if (ipEventChart) ipEventChart.destroy();
+        if (eventLabels.length > 0) {
+            ipEventChart = new Chart(ctx5, {
+                type: 'doughnut',
+                data: {
+                    labels: eventLabels,
+                    datasets: [{
+                        data: eventValues,
+                        backgroundColor: generateColors(eventLabels.length),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#888', font: { size: 9 }, boxWidth: 12 } }
+                    }
+                }
+            });
+        }
+        
+        // IP MITRE Radar Chart
+        const ipTactics = {};
+        data.alerts.forEach(alert => {
+            if (alert.mitre && alert.mitre.tactic) {
+                ipTactics[alert.mitre.tactic] = (ipTactics[alert.mitre.tactic] || 0) + 1;
+            }
+        });
+        
+        const ctx6 = document.getElementById('ipMitreChart');
+        if (ipMitreChart) ipMitreChart.destroy();
+        if (Object.keys(ipTactics).length > 0) {
+            ipMitreChart = new Chart(ctx6, {
+                type: 'radar',
+                data: {
+                    labels: Object.keys(ipTactics).map(t => t.length > 10 ? t.substring(0, 10) + '...' : t),
+                    datasets: [{
+                        label: 'Techniques',
+                        data: Object.values(ipTactics),
+                        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                        borderColor: '#3498db',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#3498db'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            ticks: { color: '#888', backdropColor: 'transparent' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            pointLabels: { color: '#888', font: { size: 9 } }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+        
+        renderTimeline(data.timeline || data.alerts.map(a => ({
+            time: a.timestamp,
+            event: a.type,
+            severity: a.severity,
+            message: a.message
+        })));
+        
+        document.getElementById('intelPanel').classList.add('active');
+        document.getElementById('overlay').classList.add('active');
+        
+    } catch (error) {
+        console.error('Error loading IP details:', error);
+    }
+}
+
+/* ========================= RENDER ATTACK CHAIN ========================= */
+function renderAttackChain(data) {
+    const container = document.getElementById('attackChain');
+    
+    const tacticGroups = {};
+    data.alerts.forEach(alert => {
+        if (alert.mitre && alert.mitre.tactic) {
+            const tactic = alert.mitre.tactic;
+            if (!tacticGroups[tactic]) {
+                tacticGroups[tactic] = [];
+            }
+            tacticGroups[tactic].push(alert);
+        }
+    });
+    
+    const sortedTactics = TACTIC_ORDER.filter(t => tacticGroups[t]);
+    
+    if (sortedTactics.length === 0) {
+        container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No attack chain detected</p>';
+        return;
+    }
+    
+    container.innerHTML = sortedTactics.map((tactic, index) => {
+        const alerts = tacticGroups[tactic];
+        const techniques = [...new Set(alerts.map(a => a.mitre.technique))];
+        const color = TACTIC_COLORS[tactic] || '#666';
+        
+        return `
+            <div class="chain-step">
+                <div class="chain-number" style="background:${color}">${index + 1}</div>
+                <div class="chain-content">
+                    <div class="chain-tactic" style="color:${color}">${tactic}</div>
+                    <div class="chain-techniques">
+                        ${techniques.slice(0, 3).map(t => `<span class="chain-tech">${t}</span>`).join('')}
+                        ${techniques.length > 3 ? `<span class="chain-tech">+${techniques.length - 3}</span>` : ''}
+                    </div>
+                    <div class="chain-count">${alerts.length} events</div>
+                </div>
+                ${index < sortedTactics.length - 1 ? '<div class="chain-arrow">â†’</div>' : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+/* ========================= RENDER IP MITRE GRID ========================= */
+function renderIPMitreGrid(data) {
+    const container = document.getElementById('ipMitreGrid');
+    
+    const techniques = {};
+    data.alerts.forEach(alert => {
+        if (alert.mitre && alert.mitre.technique !== "N/A") {
+            const t = alert.mitre.technique;
+            if (!techniques[t]) {
+                techniques[t] = {
+                    ...alert.mitre,
+                    ...(MITRE_DATABASE[t] || {}),
+                    count: 0
+                };
+            }
+            techniques[t].count++;
+        }
+    });
+    
+    if (Object.keys(techniques).length === 0) {
+        container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No MITRE techniques detected</p>';
+        return;
+    }
+    
+    container.innerHTML = Object.values(techniques)
+        .sort((a, b) => b.count - a.count)
+        .map(tech => {
+            const color = TACTIC_COLORS[tech.tactic] || '#666';
+            const severity = tech.severity || 'medium';
+            
+            return `
+                <div class="ip-mitre-card" onclick="showTechniqueDetail('${tech.technique}')">
+                    <div class="ip-mitre-header" style="background:${color}">
+                        <span class="ip-mitre-id">${tech.technique}</span>
+                        <span class="ip-mitre-count">${tech.count}x</span>
+                    </div>
+                    <div class="ip-mitre-body">
+                        <div class="ip-mitre-name">${tech.name}</div>
+                        <div class="ip-mitre-tactic">${tech.tactic}</div>
+                        <span class="severity-dot ${severity}"></span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+}
+
+/* ========================= RENDER TIMELINE ========================= */
+function renderTimeline(timeline) {
+    const container = document.getElementById('timeline');
+    
+    if (!timeline || timeline.length === 0) {
+        container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No timeline data available</p>';
+        return;
+    }
+    
+    container.innerHTML = timeline.map((item, index) => {
+        const alert = allIncidents.flatMap(i => i.alerts).find(a => 
+            a.timestamp === item.time && a.type === item.event
+        ) || {};
+        const mitre = alert.mitre || {};
+        const color = TACTIC_COLORS[mitre.tactic] || '#666';
+        
+        return `
+            <div class="timeline-item ${item.severity || 'low'}">
+                <div class="timeline-marker" style="background:${color}"></div>
+                <div class="timeline-content">
+                    <div class="timeline-header">
+                        <span class="timeline-time">${formatTime(item.time)}</span>
+                        ${mitre.technique ? `<span class="timeline-mitre" style="background:${color}">${mitre.technique}</span>` : ''}
+                    </div>
+                    <span class="timeline-event">${item.event}</span>
+                    <p class="timeline-message">${item.message}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/* ========================= CLOSE INTEL PANEL ========================= */
+function closeIntelPanel() {
+    document.getElementById('intelPanel').classList.remove('active');
+    document.getElementById('overlay').classList.remove('active');
+}
+
+/* ========================= EXPORT FUNCTIONS ========================= */
+function exportData() {
+    const blob = new Blob([JSON.stringify(allIncidents, null, 2)], {type: 'application/json'});
+    downloadBlob(blob, `soc_incidents_${getDateStr()}.json`);
+}
+
+function exportMitreReport() {
+    const report = {
+        generated: new Date().toISOString(),
+        summary: {
+            total_ips: allIncidents.length,
+            total_events: globalMitreStats.totalEvents,
+            total_techniques: Object.keys(globalMitreStats.techniques).length,
+            total_tactics_covered: Object.keys(globalMitreStats.tactics).filter(t => globalMitreStats.tactics[t] > 0).length,
+            high_risk_ips: allIncidents.filter(i => i.level === 'high').length
+        },
+        tactic_coverage: globalMitreStats.tactics,
+        techniques: Object.values(globalMitreStats.techniques).map(t => ({
+            id: t.id,
+            name: t.name,
+            tactic: t.tactic,
+            severity: t.severity,
+            count: t.count,
+            affected_ips: [...t.ips]
+        })).sort((a, b) => b.count - a.count),
+        attack_chains: allIncidents.map(i => ({
+            ip: i.ip,
+            risk_score: i.risk_score,
+            level: i.level,
+            techniques: [...new Set(i.alerts.filter(a => a.mitre?.technique !== "N/A").map(a => a.mitre.technique))],
+            tactics: [...new Set(i.alerts.filter(a => a.mitre?.tactic).map(a => a.mitre.tactic))]
+        }))
+    };
+    
+    const blob = new Blob([JSON.stringify(report, null, 2)], {type: 'application/json'});
+    downloadBlob(blob, `mitre_attack_report_${getDateStr()}.json`);
+}
+
+function exportCSV() {
+    let csv = 'IP,Risk Score,Level,Event Count,Techniques,Tactics,First Seen,Last Seen\n';
+    allIncidents.forEach(i => {
+        const techniques = [...new Set(i.alerts.filter(a => a.mitre?.technique !== "N/A").map(a => a.mitre.technique))].join(';');
+        const tactics = [...new Set(i.alerts.filter(a => a.mitre?.tactic).map(a => a.mitre.tactic))].join(';');
+        csv += `"${i.ip}",${i.risk_score},${i.level},${i.event_count || i.alerts.length},"${techniques}","${tactics}","${i.first_seen || ''}","${i.last_seen || ''}"\n`;
+    });
+    
+    const blob = new Blob([csv], {type: 'text/csv'});
+    downloadBlob(blob, `soc_incidents_${getDateStr()}.csv`);
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/* ========================= UTILITIES ========================= */
+function formatTime(timestamp) {
+    if (!timestamp) return 'N/A';
+    try {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch {
+        return timestamp;
+    }
+}
+
+function getDateStr() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function generateColors(count) {
+    const palette = [
+        '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+        '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b',
+        '#2980b9', '#8e44ad', '#27ae60', '#d35400', '#7f8c8d'
+    ];
+    return Array.from({length: count}, (_, i) => palette[i % palette.length]);
+}
+
+function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').innerText = now.toLocaleString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+/* ========================= EVENT LISTENERS ========================= */
+document.getElementById('searchBox').addEventListener('input', renderIncidents);
+document.getElementById('tacticFilter').addEventListener('change', renderIncidents);
+document.getElementById('severityFilter').addEventListener('change', renderIncidents);
+document.getElementById('tableSearch').addEventListener('input', updateMitreTable);
+
+// Tactic box click handler
+document.querySelectorAll('.tactic-box').forEach(box => {
+    box.addEventListener('click', () => {
+        const tactic = box.dataset.tactic;
+        document.getElementById('tacticFilter').value = tactic;
+        renderIncidents();
+        document.getElementById('incident-container').scrollIntoView({ behavior: 'smooth' });
+    });
+});
+
+// Keyboard shortcut to close panel
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeIntelPanel();
+    }
+});
+
+/* ========================= INITIALIZATION ========================= */
+setInterval(updateClock, 1000);
+updateClock();
+loadIncidents();
+setInterval(loadIncidents, 15000);
+</script>
+</body>
+</html>
